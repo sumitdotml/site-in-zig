@@ -9,8 +9,6 @@ pub const Frontmatter = struct {
     breadcrumb_title: ?[]const u8 = null,
     image: ?[]const u8 = null,
     draft: bool = false,
-
-    // Store raw key-value pairs for custom fields
     custom: std.StringHashMap([]const u8),
 
     pub fn init(allocator: std.mem.Allocator) Frontmatter {
@@ -42,56 +40,45 @@ pub const ParseResult = struct {
     body_start: usize,
 };
 
-/// Parse TOML-like frontmatter from markdown content
+/// Parses TOML-like frontmatter from markdown content
+///
 /// Format:
 /// ---
 /// title = "My Title"
 /// description = "My Description"
 /// pubDate = 2025-10-30
 /// ---
+///
 pub fn parse(allocator: std.mem.Allocator, content: []const u8) !ParseResult {
     var fm = Frontmatter.init(allocator);
     errdefer fm.deinit(allocator);
 
-    // Check for frontmatter delimiter
     if (!std.mem.startsWith(u8, content, "---")) {
-        return .{
-            .frontmatter = fm,
-            .body_start = 0,
-        };
+        return .{ .frontmatter = fm, .body_start = 0 };
     }
 
-    // Find the ending delimiter
-    const start = 3; // Skip first "---"
+    const start = 3;
     var end: usize = start;
 
-    // Skip whitespace/newline after opening ---
     while (end < content.len and (content[end] == '\n' or content[end] == '\r')) {
         end += 1;
     }
 
     const body_search_start = end;
 
-    // Find closing ---
     if (std.mem.indexOf(u8, content[body_search_start..], "\n---")) |close_pos| {
         end = body_search_start + close_pos;
     } else {
-        // No closing delimiter found
-        return .{
-            .frontmatter = fm,
-            .body_start = 0,
-        };
+        return .{ .frontmatter = fm, .body_start = 0 };
     }
 
     const frontmatter_text = content[body_search_start..end];
 
-    // Parse each line
     var lines = std.mem.splitSequence(u8, frontmatter_text, "\n");
     while (lines.next()) |line| {
         const trimmed = std.mem.trim(u8, line, " \t\r");
         if (trimmed.len == 0) continue;
 
-        // Parse key = value or key: value
         if (parseKeyValue(trimmed)) |kv| {
             const key = kv.key;
             const value = try allocator.dupe(u8, kv.value);
@@ -113,30 +100,24 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !ParseResult {
                 fm.draft = std.mem.eql(u8, value, "true");
                 allocator.free(value);
             } else if (std.mem.startsWith(u8, key, "dateLabels.")) {
-                // Handle nested dateLabels
                 if (std.mem.eql(u8, key, "dateLabels.published") or std.mem.eql(u8, key, "dateLabels.page")) {
                     fm.date_label = value;
                 } else {
                     allocator.free(value);
                 }
             } else {
-                // Store as custom field
                 const key_copy = try allocator.dupe(u8, key);
                 try fm.custom.put(key_copy, value);
             }
         }
     }
 
-    // Find where the body starts (after closing --- and newline)
-    var body_start = end + 4; // Skip "\n---"
+    var body_start = end + 4;
     while (body_start < content.len and (content[body_start] == '\n' or content[body_start] == '\r')) {
         body_start += 1;
     }
 
-    return .{
-        .frontmatter = fm,
-        .body_start = body_start,
-    };
+    return .{ .frontmatter = fm, .body_start = body_start };
 }
 
 const KeyValue = struct {
@@ -145,41 +126,33 @@ const KeyValue = struct {
 };
 
 fn parseKeyValue(line: []const u8) ?KeyValue {
-    // Try TOML-style: key = "value" or key = value
+    // TOML-style: key = "value"
     if (std.mem.indexOf(u8, line, " = ")) |eq_pos| {
         const key = std.mem.trim(u8, line[0..eq_pos], " \t");
         var value = std.mem.trim(u8, line[eq_pos + 3 ..], " \t");
-
-        // Remove quotes if present
         if (value.len >= 2 and value[0] == '"' and value[value.len - 1] == '"') {
             value = value[1 .. value.len - 1];
         }
-
         return .{ .key = key, .value = value };
     }
 
-    // Try YAML-style: key: value (for backwards compat during migration)
+    // YAML-style: key: value
     if (std.mem.indexOf(u8, line, ": ")) |colon_pos| {
         const key = std.mem.trim(u8, line[0..colon_pos], " \t");
         var value = std.mem.trim(u8, line[colon_pos + 2 ..], " \t");
-
-        // Remove quotes if present
         if (value.len >= 2 and value[0] == '"' and value[value.len - 1] == '"') {
             value = value[1 .. value.len - 1];
         }
-
         return .{ .key = key, .value = value };
     }
 
-    // Try: key=value (no spaces)
+    // key=value (no spaces)
     if (std.mem.indexOf(u8, line, "=")) |eq_pos| {
         const key = std.mem.trim(u8, line[0..eq_pos], " \t");
         var value = std.mem.trim(u8, line[eq_pos + 1 ..], " \t");
-
         if (value.len >= 2 and value[0] == '"' and value[value.len - 1] == '"') {
             value = value[1 .. value.len - 1];
         }
-
         return .{ .key = key, .value = value };
     }
 
