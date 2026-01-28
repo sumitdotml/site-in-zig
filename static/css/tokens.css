@@ -1,0 +1,37 @@
+@import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap");
+
+:root {
+    --font-family-base: "IBM Plex Mono", "Monaco", "Menlo", "Consolas", monospace;
+    --font-family-code:
+        "Fira Code", "IBM Plex Mono", "Monaco", "Menlo", "Consolas", monospace;
+
+    --font-weight-light: 300;
+    --font-weight-regular: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+
+    --text-color: #333333;
+    --text-color-light: #666666;
+    --text-color-muted: #999999;
+    --bg-color: #fafaf8;
+    --bg-color-rgb: 250, 250, 248;
+    --accent-purple: #8b5cf6;
+    --gray-light: 240, 240, 240;
+    --purple-light: 245, 243, 255;
+    --header-overlay-alpha: 1;
+    --header-backdrop-blur: 0px;
+}
+
+[data-theme="dark"] {
+    --text-color: #e5e5e5;
+    --text-color-light: #b1b1b1;
+    --text-color-muted: #8c8c8c;
+    --bg-color: #140f0f;
+    --bg-color-rgb: 20, 15, 15;
+    --gray-light: 40, 40, 40;
+    --purple-light: 45, 35, 70;
+    --accent-purple: #ae8bff;
+    --header-overlay-alpha: 1;
+    --header-backdrop-blur: 0px;
+}

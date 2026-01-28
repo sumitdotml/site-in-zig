@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    {{> head}}
+    <link rel="stylesheet" href="/css/layout.css">
+</head>
+<body>
+    {{> header}}
+    <main>
+        <article class="page">
+            <header class="post-header">
+                <h1 class="post-title">{{title}}</h1>
+                {{#if has_date}}
+                <div class="post-dates">
+                    <p class="date-meta">
+                        <span class="date-label">{{date_label}}</span>
+                        <time datetime="{{date}}">{{date}}</time>
+                    </p>
+                </div>
+                {{/if}}
+            </header>
+            <div class="page-content prose">
+                {{{content}}}
+            </div>
+        </article>
+    </main>
+    {{> footer}}
+</body>
+</html>

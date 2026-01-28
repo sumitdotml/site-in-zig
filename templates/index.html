@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    {{> head}}
+</head>
+<body>
+    {{> header}}
+    <main>
+        <h1 class="hero-title">{{site_title}}</h1>
+        <p>{{site_description}}</p>
+
+        {{#if has_posts}}
+        <section class="recent-posts">
+            <h2>Recent Posts</h2>
+            <ul class="posts-list">
+                {{#each recent_posts}}
+                <li class="post-item">
+                    <a href="{{url}}">
+                        <h3 class="post-title">{{title}}</h3>
+                        <p class="post-meta">
+                            <span class="post-date">{{date}}</span>
+                        </p>
+                    </a>
+                </li>
+                {{/each}}
+            </ul>
+            <p><a href="/blog/">View all posts &rarr;</a></p>
+        </section>
+        {{/if}}
+    </main>
+    {{> footer}}
+</body>
+</html>

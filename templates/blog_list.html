@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    {{> head}}
+    <link rel="stylesheet" href="/css/blog.css">
+</head>
+<body>
+    {{> header}}
+    <main class="blog-page">
+        <h1>Blog</h1>
+        <p class="blog-description">{{description}}</p>
+
+        <ul class="posts-list">
+            {{#each posts}}
+            <li class="post-item">
+                <a href="{{url}}">
+                    <h2 class="post-title">{{title}}</h2>
+                    <div class="post-meta">
+                        <time class="post-date" datetime="{{date}}">{{date}}</time>
+                        <span class="post-description">{{description}}</span>
+                    </div>
+                </a>
+            </li>
+            {{/each}}
+        </ul>
+    </main>
+    {{> footer}}
+</body>
+</html>
