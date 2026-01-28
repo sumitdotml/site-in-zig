@@ -1,7 +1,7 @@
 const std = @import("std");
 const footnotes = @import("footnotes.zig");
 
-pub const MathBlock = struct {
+const MathBlock = struct {
     placeholder: []const u8,
     content: []const u8,
     is_display: bool,
@@ -9,49 +9,35 @@ pub const MathBlock = struct {
 
 pub const ProcessResult = struct {
     html: []const u8,
-    math_blocks: []MathBlock,
     allocator: std.mem.Allocator,
 
     pub fn deinit(self: *ProcessResult) void {
         self.allocator.free(self.html);
-        for (self.math_blocks) |block| {
-            self.allocator.free(block.placeholder);
-            self.allocator.free(block.content);
-        }
-        self.allocator.free(self.math_blocks);
     }
 };
 
-/// Process markdown content to HTML, preserving math blocks for client-side rendering
-pub fn process(allocator: std.mem.Allocator, content: []const u8) !ProcessResult {
-    return processSimple(allocator, content);
-}
-
-/// Simple markdown processor (pure Zig implementation)
 pub fn processSimple(allocator: std.mem.Allocator, content: []const u8) !ProcessResult {
     var math_list: std.ArrayList(MathBlock) = .{};
-    defer math_list.deinit(allocator);
+    defer {
+        for (math_list.items) |block| {
+            allocator.free(block.placeholder);
+            allocator.free(block.content);
+        }
+        math_list.deinit(allocator);
+    }
 
-    // Extract math blocks
     const preprocessed = try extractMathBlocks(allocator, content, &math_list);
     defer allocator.free(preprocessed);
 
-    // Process footnotes
     const with_footnotes = try footnotes.processReferences(allocator, preprocessed);
     defer allocator.free(with_footnotes);
 
-    // Simple markdown to HTML conversion (basic implementation)
     var html = try simpleMarkdownToHtml(allocator, with_footnotes);
     errdefer allocator.free(html);
 
-    // Restore math blocks
     html = try restoreMathBlocks(allocator, html, math_list.items);
 
-    return .{
-        .html = html,
-        .math_blocks = try allocator.dupe(MathBlock, math_list.items),
-        .allocator = allocator,
-    };
+    return .{ .html = html, .allocator = allocator };
 }
 
 fn extractMathBlocks(allocator: std.mem.Allocator, content: []const u8, math_list: *std.ArrayList(MathBlock)) ![]const u8 {
@@ -63,16 +49,13 @@ fn extractMathBlocks(allocator: std.mem.Allocator, content: []const u8, math_lis
     var i: usize = 0;
 
     while (i < content.len) {
-        // Check for display math $$...$$
+        // Display math $$...$$
         if (i + 1 < content.len and content[i] == '$' and content[i + 1] == '$') {
             const start = i + 2;
             var end = start;
 
-            // Find closing $$
             while (end + 1 < content.len) {
-                if (content[end] == '$' and content[end + 1] == '$') {
-                    break;
-                }
+                if (content[end] == '$' and content[end + 1] == '$') break;
                 end += 1;
             }
 
@@ -93,25 +76,20 @@ fn extractMathBlocks(allocator: std.mem.Allocator, content: []const u8, math_lis
             }
         }
 
-        // Check for inline math $...$
+        // Inline math $...$
         if (content[i] == '$' and (i == 0 or content[i - 1] != '$')) {
-            // Make sure next char isn't $ (would be display math)
             if (i + 1 < content.len and content[i + 1] != '$') {
                 const start = i + 1;
                 var end = start;
 
-                // Find closing $ (not $$)
                 while (end < content.len) {
                     if (content[end] == '$') {
-                        if (end + 1 >= content.len or content[end + 1] != '$') {
-                            break;
-                        }
+                        if (end + 1 >= content.len or content[end + 1] != '$') break;
                     }
                     end += 1;
                 }
 
                 if (end < content.len and content[end] == '$') {
-                    // Check it's not empty and doesn't span multiple lines
                     const math_content = content[start..end];
                     if (math_content.len > 0 and std.mem.indexOf(u8, math_content, "\n") == null) {
                         const placeholder = try std.fmt.allocPrint(allocator, "{{{{MATH_INLINE_{d}}}}}", .{inline_count});
@@ -148,7 +126,6 @@ fn restoreMathBlocks(allocator: std.mem.Allocator, html: []const u8, math_blocks
             try std.fmt.allocPrint(allocator, "<span class=\"math-inline\">${s}$</span>", .{block.content});
         defer allocator.free(wrapper);
 
-        // Replace placeholder with wrapped math
         if (std.mem.indexOf(u8, result, block.placeholder)) |pos| {
             const new_len = result.len - block.placeholder.len + wrapper.len;
             const new_result = try allocator.alloc(u8, new_len);
@@ -165,7 +142,6 @@ fn restoreMathBlocks(allocator: std.mem.Allocator, html: []const u8, math_blocks
     return result;
 }
 
-/// Simple markdown to HTML converter (fallback, basic implementation)
 fn simpleMarkdownToHtml(allocator: std.mem.Allocator, content: []const u8) ![]const u8 {
     var result: std.ArrayList(u8) = .{};
     defer result.deinit(allocator);
@@ -180,7 +156,6 @@ fn simpleMarkdownToHtml(allocator: std.mem.Allocator, content: []const u8) ![]co
     while (lines.next()) |line| {
         const trimmed = std.mem.trimRight(u8, line, " \t\r");
 
-        // Code blocks
         if (std.mem.startsWith(u8, trimmed, "```")) {
             if (in_code_block) {
                 try result.appendSlice(allocator, "</code></pre></div>\n");
@@ -208,7 +183,6 @@ fn simpleMarkdownToHtml(allocator: std.mem.Allocator, content: []const u8) ![]co
             continue;
         }
 
-        // Empty line
         if (trimmed.len == 0) {
             if (in_paragraph) {
                 try result.appendSlice(allocator, "</p>\n");
@@ -225,7 +199,6 @@ fn simpleMarkdownToHtml(allocator: std.mem.Allocator, content: []const u8) ![]co
             continue;
         }
 
-        // Headers
         if (std.mem.startsWith(u8, trimmed, "######")) {
             const processed = try processInline(allocator, std.mem.trimLeft(u8, trimmed[6..], " "));
             defer allocator.free(processed);
@@ -275,13 +248,11 @@ fn simpleMarkdownToHtml(allocator: std.mem.Allocator, content: []const u8) ![]co
             continue;
         }
 
-        // Horizontal rule
         if (std.mem.eql(u8, trimmed, "---") or std.mem.eql(u8, trimmed, "***") or std.mem.eql(u8, trimmed, "___")) {
             try result.appendSlice(allocator, "<hr>\n");
             continue;
         }
 
-        // Blockquote
         if (std.mem.startsWith(u8, trimmed, "> ")) {
             if (!in_blockquote) {
                 try result.appendSlice(allocator, "<blockquote>\n");
@@ -295,7 +266,6 @@ fn simpleMarkdownToHtml(allocator: std.mem.Allocator, content: []const u8) ![]co
             continue;
         }
 
-        // Unordered list
         if (std.mem.startsWith(u8, trimmed, "- ") or std.mem.startsWith(u8, trimmed, "* ")) {
             if (!in_list) {
                 try result.appendSlice(allocator, "<ul>\n");
@@ -309,7 +279,6 @@ fn simpleMarkdownToHtml(allocator: std.mem.Allocator, content: []const u8) ![]co
             continue;
         }
 
-        // Ordered list
         if (trimmed.len > 2 and trimmed[0] >= '0' and trimmed[0] <= '9') {
             if (std.mem.indexOf(u8, trimmed, ". ")) |dot_pos| {
                 if (dot_pos > 0 and dot_pos < 4) {
@@ -327,7 +296,6 @@ fn simpleMarkdownToHtml(allocator: std.mem.Allocator, content: []const u8) ![]co
             }
         }
 
-        // Regular paragraph
         if (!in_paragraph) {
             try result.appendSlice(allocator, "<p>");
             in_paragraph = true;
@@ -339,7 +307,6 @@ fn simpleMarkdownToHtml(allocator: std.mem.Allocator, content: []const u8) ![]co
         try result.appendSlice(allocator, processed);
     }
 
-    // Close any open tags
     if (in_paragraph) try result.appendSlice(allocator, "</p>\n");
     if (in_list) try result.appendSlice(allocator, "</ul>\n");
     if (in_blockquote) try result.appendSlice(allocator, "</blockquote>\n");
@@ -354,7 +321,6 @@ fn processInline(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
 
     var i: usize = 0;
     while (i < text.len) {
-        // Bold **text**
         if (i + 1 < text.len and text[i] == '*' and text[i + 1] == '*') {
             if (std.mem.indexOf(u8, text[i + 2 ..], "**")) |end| {
                 try result.appendSlice(allocator, "<strong>");
@@ -365,7 +331,6 @@ fn processInline(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
             }
         }
 
-        // Italic *text* or _text_
         if (text[i] == '*' or text[i] == '_') {
             const marker = text[i];
             var end: usize = i + 1;
@@ -379,7 +344,6 @@ fn processInline(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
             }
         }
 
-        // Inline code `text`
         if (text[i] == '`') {
             if (std.mem.indexOf(u8, text[i + 1 ..], "`")) |end| {
                 try result.appendSlice(allocator, "<code>");
@@ -390,7 +354,6 @@ fn processInline(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
             }
         }
 
-        // Links [text](url)
         if (text[i] == '[') {
             if (std.mem.indexOf(u8, text[i..], "](")) |bracket_end| {
                 if (std.mem.indexOf(u8, text[i + bracket_end + 2 ..], ")")) |paren_end| {
@@ -407,7 +370,6 @@ fn processInline(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
             }
         }
 
-        // Images ![alt](src)
         if (i + 1 < text.len and text[i] == '!' and text[i + 1] == '[') {
             if (std.mem.indexOf(u8, text[i + 1 ..], "](")) |bracket_end| {
                 if (std.mem.indexOf(u8, text[i + 2 + bracket_end ..], ")")) |paren_end| {
@@ -448,23 +410,12 @@ fn escapeHtml(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     return result.toOwnedSlice(allocator);
 }
 
-test "extract math blocks" {
+test "process markdown with math" {
     const allocator = std.testing.allocator;
 
-    var math_list: std.ArrayList(MathBlock) = .{};
-    defer {
-        for (math_list.items) |block| {
-            allocator.free(block.placeholder);
-            allocator.free(block.content);
-        }
-        math_list.deinit(allocator);
-    }
+    const content = "Hello $$x^2$$ world";
+    var result = try processSimple(allocator, content);
+    defer result.deinit();
 
-    const content = "Hello $$x^2$$ and $y^2$ world";
-    const extracted = try extractMathBlocks(allocator, content, &math_list);
-    defer allocator.free(extracted);
-
-    try std.testing.expectEqual(@as(usize, 2), math_list.items.len);
-    try std.testing.expect(math_list.items[0].is_display);
-    try std.testing.expect(!math_list.items[1].is_display);
+    try std.testing.expect(std.mem.indexOf(u8, result.html, "katex-display") != null);
 }

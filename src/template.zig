@@ -80,46 +80,23 @@ pub const Context = struct {
     }
 };
 
-pub const Template = struct {
-    allocator: std.mem.Allocator,
-    source: []const u8,
-
-    pub fn init(allocator: std.mem.Allocator, source: []const u8) Template {
-        return .{
-            .allocator = allocator,
-            .source = source,
-        };
-    }
-
-    /// Render the template with the given context
-    pub fn render(self: *const Template, context: *const Context) ![]const u8 {
-        return renderTemplate(self.allocator, self.source, context);
-    }
-};
-
-/// Render a template string with context
 pub fn renderTemplate(allocator: std.mem.Allocator, template_str: []const u8, context: *const Context) ![]const u8 {
     var result: std.ArrayList(u8) = .{};
     defer result.deinit(allocator);
 
     var i: usize = 0;
     while (i < template_str.len) {
-        // Look for template tags starting with {{
         if (i + 1 < template_str.len and template_str[i] == '{' and template_str[i + 1] == '{') {
-            // Find closing }}
             var j = i + 2;
 
-            // Handle triple braces {{{ for raw output
+            // Triple braces {{{ for raw output
             const is_raw = j < template_str.len and template_str[j] == '{';
             if (is_raw) j += 1;
 
             const tag_start = j;
 
-            // Find the matching closing braces
             while (j < template_str.len) {
-                if (j + 1 < template_str.len and template_str[j] == '}' and template_str[j + 1] == '}') {
-                    break;
-                }
+                if (j + 1 < template_str.len and template_str[j] == '}' and template_str[j + 1] == '}') break;
                 j += 1;
             }
 
@@ -127,9 +104,7 @@ pub fn renderTemplate(allocator: std.mem.Allocator, template_str: []const u8, co
                 const tag_end = j;
                 const tag = std.mem.trim(u8, template_str[tag_start..tag_end], " \t");
 
-                // Handle different tag types
                 if (std.mem.startsWith(u8, tag, "#if ")) {
-                    // Conditional: {{#if variable}}...{{/if}}
                     const var_name = std.mem.trim(u8, tag[4..], " \t");
                     const end_tag = "{{/if}}";
 
@@ -144,7 +119,6 @@ pub fn renderTemplate(allocator: std.mem.Allocator, template_str: []const u8, co
                         continue;
                     }
                 } else if (std.mem.startsWith(u8, tag, "#each ")) {
-                    // Loop: {{#each items}}...{{/each}}
                     const var_name = std.mem.trim(u8, tag[6..], " \t");
                     const end_tag = "{{/each}}";
 
@@ -161,7 +135,6 @@ pub fn renderTemplate(allocator: std.mem.Allocator, template_str: []const u8, co
                         continue;
                     }
                 } else if (std.mem.startsWith(u8, tag, "> ")) {
-                    // Partial: {{> partialName}}
                     const partial_name = std.mem.trim(u8, tag[2..], " \t");
                     if (context.partials.get(partial_name)) |partial_content| {
                         const rendered = try renderTemplate(allocator, partial_content, context);
@@ -172,12 +145,10 @@ pub fn renderTemplate(allocator: std.mem.Allocator, template_str: []const u8, co
                     if (is_raw and i < template_str.len and template_str[i] == '}') i += 1;
                     continue;
                 } else if (!std.mem.startsWith(u8, tag, "/") and !std.mem.startsWith(u8, tag, "#")) {
-                    // Variable substitution
                     if (context.getString(tag)) |value| {
                         if (is_raw) {
                             try result.appendSlice(allocator, value);
                         } else {
-                            // Escape HTML by default
                             const escaped = try escapeHtml(allocator, value);
                             defer allocator.free(escaped);
                             try result.appendSlice(allocator, escaped);
@@ -219,14 +190,12 @@ fn escapeHtml(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     return result.toOwnedSlice(allocator);
 }
 
-/// Load template from file
 pub fn loadTemplate(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
-    return try file.readToEndAlloc(allocator, 1024 * 1024); // 1MB max
+    return try file.readToEndAlloc(allocator, 1024 * 1024);
 }
 
-/// Load all templates from a directory
 pub fn loadTemplates(allocator: std.mem.Allocator, template_dir: []const u8) !std.StringHashMap([]const u8) {
     var templates = std.StringHashMap([]const u8).init(allocator);
     errdefer templates.deinit();
@@ -249,11 +218,10 @@ pub fn loadTemplates(allocator: std.mem.Allocator, template_dir: []const u8) !st
         defer allocator.free(full_path);
 
         const content = try loadTemplate(allocator, full_path);
-        const name = try allocator.dupe(u8, entry.name[0 .. entry.name.len - 5]); // Remove .html
+        const name = try allocator.dupe(u8, entry.name[0 .. entry.name.len - 5]);
         try templates.put(name, content);
     }
 
-    // Also load partials from partials/ subdirectory
     const partials_dir = try std.fs.path.join(allocator, &.{ template_dir, "partials" });
     defer allocator.free(partials_dir);
 

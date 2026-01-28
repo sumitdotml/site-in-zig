@@ -1,10 +1,4 @@
 const std = @import("std");
-const scanner = @import("scanner.zig");
-const frontmatter = @import("frontmatter.zig");
-const markdown = @import("markdown.zig");
-const footnotes = @import("footnotes.zig");
-const template = @import("template.zig");
-const assets = @import("assets.zig");
 const site = @import("site.zig");
 
 pub fn main() !void {
@@ -15,7 +9,6 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    // Parse command line arguments
     var content_dir: []const u8 = "content";
     var output_dir: []const u8 = "dist";
     var template_dir: []const u8 = "templates";
@@ -48,7 +41,6 @@ pub fn main() !void {
     std.debug.print("Template directory: {s}\n", .{template_dir});
     std.debug.print("Static directory: {s}\n\n", .{static_dir});
 
-    // Build the site
     try site.build(allocator, .{
         .content_dir = content_dir,
         .output_dir = output_dir,
@@ -73,14 +65,4 @@ fn printHelp() void {
         \\  --help, -h         Show this help message
         \\
     , .{});
-}
-
-test "main imports" {
-    _ = scanner;
-    _ = frontmatter;
-    _ = markdown;
-    _ = footnotes;
-    _ = template;
-    _ = assets;
-    _ = site;
 }

@@ -44,24 +44,20 @@ pub const Scanner = struct {
     }
 
     pub fn scan(self: *Scanner) !void {
-        // Scan blog directory
         const blog_dir = try std.fs.path.join(self.allocator, &.{ self.content_dir, "blog" });
         defer self.allocator.free(blog_dir);
         try self.scanDirectory(blog_dir, .blog);
 
-        // Scan pages directory
         const pages_dir = try std.fs.path.join(self.allocator, &.{ self.content_dir, "pages" });
         defer self.allocator.free(pages_dir);
         try self.scanDirectory(pages_dir, .page);
 
-        // Sort blog posts by date (newest first)
+        // Sort blog posts by date, newest first
         std.mem.sort(ContentFile, self.files.items, {}, struct {
             fn lessThan(_: void, a: ContentFile, b: ContentFile) bool {
-                // Blog posts should be sorted by date, pages don't need sorting
                 if (a.content_type == .blog and b.content_type == .blog) {
                     const a_date = a.frontmatter.pub_date orelse "";
                     const b_date = b.frontmatter.pub_date orelse "";
-                    // Sort descending (newest first)
                     return std.mem.order(u8, a_date, b_date) == .gt;
                 }
                 return false;
@@ -89,22 +85,18 @@ pub const Scanner = struct {
             const full_path = try std.fs.path.join(self.allocator, &.{ dir_path, name });
             errdefer self.allocator.free(full_path);
 
-            // Create relative path (e.g., "blog/inside-a-transformer.md")
             const type_prefix = if (content_type == .blog) "blog" else "pages";
             const relative_path = try std.fs.path.join(self.allocator, &.{ type_prefix, name });
             errdefer self.allocator.free(relative_path);
 
-            // Create slug (filename without .md extension)
             const slug = try self.allocator.dupe(u8, name[0 .. name.len - 3]);
             errdefer self.allocator.free(slug);
 
-            // Read file content
             const file = try std.fs.cwd().openFile(full_path, .{});
             defer file.close();
-            const raw_content = try file.readToEndAlloc(self.allocator, 1024 * 1024); // 1MB max
+            const raw_content = try file.readToEndAlloc(self.allocator, 1024 * 1024);
             errdefer self.allocator.free(raw_content);
 
-            // Parse frontmatter
             const fm = try frontmatter.parse(self.allocator, raw_content);
 
             try self.files.append(self.allocator, .{
@@ -118,14 +110,6 @@ pub const Scanner = struct {
 
             std.debug.print("  Found: {s} ({s})\n", .{ relative_path, fm.frontmatter.title orelse "untitled" });
         }
-    }
-
-    pub fn getBlogPosts(self: *Scanner) []ContentFile {
-        return self.files.items;
-    }
-
-    pub fn getPages(self: *Scanner) []ContentFile {
-        return self.files.items;
     }
 };
 
